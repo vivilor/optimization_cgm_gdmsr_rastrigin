@@ -1,124 +1,94 @@
-import rastrigin
-from math import fabs
+import numpy as np
 
 
-def square_norm(x_input):
-    result = 0
+def _alpha_coeff(gradient, direction, hessian) -> float:
+    nom = np.dot(gradient, direction)
+    den = np.matmul(np.matmul(direction.T, hessian), direction)
+    alpha = -float(nom / den)
 
-    for x_i in x_input:
-        result += x_i ** 2
-
-    return result
-
-
-def scalar_prod(x_a, x_b):
-    result = 0
-
-    for i in range(len(x_a)):
-        result += x_a[i] * x_b[i]
-
-    return result
+    return alpha
 
 
-def vector_multiply(x_vec, a):
-    result_vec = []
+def _beta_coeff(gradient, direction, hessian) -> float:
+    nom = np.matmul(np.matmul(gradient.T, hessian), direction)
+    den = np.matmul(np.matmul(direction.T, hessian), direction)
+    beta = float(nom / den)
 
-    for x_i in x_vec:
-        result_vec.append(x_i * a)
-
-    return result_vec
-
-
-def vector_sum(x_a, x_b):
-    result_vec = []
-
-    for i in range(len(x_a)):
-        result_vec.append(x_a[i] + x_b[i])
-
-    return result_vec
+    return beta
 
 
-def vector_diff(x_a, x_b):
-    result_vec = []
-
-    for i in range(len(x_a)):
-        result_vec.append(x_a[i] - x_b[i])
-
-    return result_vec
-
-
-def fletcher_reeves_coeff(grad, grad_prev):
-    return \
-        square_norm(grad) /\
-        square_norm(grad_prev)
-
-
-def polak_ribiere(grad, grad_prev):
-    return \
-        scalar_prod(grad, vector_diff(grad, grad_prev)) /\
-        square_norm(grad_prev)
-
-
-def search_direction(grad, grad_prev, dir_prev):
-    if not grad_prev or not dir_prev:
-        return grad
-    else:
-        return vector_sum(grad, vector_multiply(dir_prev, polak_ribiere(grad, grad_prev)))
-
-
-def cgm(fn, dfn, x_start, eps):
-    """
-    Найти минимум функции `fn` методом сопряженных градиентов
-    с начальным приближением `x_start` и точностью `eps`
-    :param fn:
-    :param dfn:
-    :param x_start:
-    :param eps:
-    :return:
-    """
+def cgm(fn, grad_fn, hessian_fn, x_start, eps, k_max=-1):
     # Размерность пространства
-    dim = len(x_start)
+    dim = x_start.size
 
     # Номер шага
-    k = 0
+    k = 1
+    x_points = np.empty(0)
+    y_points = np.empty(0)
+    fn_points = np.empty(0)
 
     is_not_finished = True
-    grad = None
-    grad_prev = None
-    dir = None
-    dir_prev = None
-    x_current = x_start.copy()
+    should_check_step_index = True
 
-    f = .0
-    f_prev = .0
+    x_current = np.copy(x_start)
+    gradient = grad_fn(x_current)
+    direction = -gradient
+
+    fn_val = fn(x_current)
+
+    print('Step #{0}'.format(1))
+    print('x\t{0}'.format(x_current))
+    print('F(x)\t{0}'.format(fn_val))
+
+    prev_fn_val = fn_val + eps * 2.
+
+    x_points = np.append(x_points, x_current[0])
+    y_points = np.append(y_points, x_current[1])
+    fn_points = np.append(fn_points, fn_val)
+
+    if k_max < 0:
+        should_check_step_index = False
 
     while is_not_finished:
         print('Step #{0}'.format(k))
-        if k > 0:
-            grad_prev = grad.copy()
 
-        grad = dfn(x_current)
+        hessian = hessian_fn(x_current)
 
-        print('Current grad: {0}'.format(grad))
+        alpha = _alpha_coeff(gradient, direction, hessian)
 
-        dir = search_direction(grad, grad_prev, dir_prev)
+        if alpha is np.nan:
+            print('Alpha is nan')
+            return x_points, y_points, fn_points
 
-        print('Current direction: {0}'.format(dir))
+        x_current = x_current + alpha * direction
 
-        x_current = vector_sum(x_current, vector_multiply(dir, 1e-5))
+        prev_fn_val = fn_val
 
-        print('Current X: {0}'.format(x_current))
+        fn_val = fn(x_current)
 
-        if dir:
-            dir_prev = dir.copy()
+        print('x\t{0}'.format(x_current))
+        print('F(x)\t{0}'.format(fn_val))
 
-        f_prev = f
+        x_points = np.append(x_points, x_current[0])
+        y_points = np.append(y_points, x_current[1])
+        fn_points = np.append(fn_points, fn_val)
 
-        f = fn(x_current)
+        fn_values_diff = np.abs(prev_fn_val - fn_val)
+        print('F_k-1(x) - F_k(x) = ', fn_values_diff)
 
-        if k > 0 and fabs(f - f_prev) < eps:
-            print('{0} - {1} = {2}\n'.format(f, f_prev, f - f_prev))
-            return x_current
+        if fn_values_diff < eps:
+            return x_points, y_points, fn_points
 
+        if should_check_step_index and k is k_max:
+            return x_points, y_points, fn_points
+
+        gradient = grad_fn(x_current)
+
+        beta = _beta_coeff(gradient, direction, hessian)
+
+        if beta is np.nan:
+            print('Beta is nan')
+            return x_points, y_points, fn_points
+
+        direction = -gradient + beta * direction
         k += 1
-

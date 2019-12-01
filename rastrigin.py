@@ -1,32 +1,35 @@
-from math import cos, sin, pi
+import numpy as np
 
 
-def fn(x_input, a=10):
-    """
-    Вычислить функцию Растригина от вектора
-    :param x_input: входной вектор
-    :param a: коэффициент фукнции
-    :return: значение функция Растригина в заданной входным вектором точке
-    """
-    n = len(x_input)
-    result = a * n
-
-    for x_i in x_input:
-        result += x_i ** 2 - a * cos(2 * pi * x_i)
-
-    return result
+def _dfn(x_i, a=10):
+    return 2 * np.pi * a * np.sin(2 * np.pi * x_i) + 2 * x_i
 
 
-def private_derivative(x_i, a=10):
-    return 2 * x_i + 2 * pi * a * sin(2 * pi * x_i)
+def _d2fn(x_i, a=10):
+    return 2 + 4 * np.pi ** 2 * a * np.cos(2 * np.pi * x_i)
 
 
-def gradient(x_input, negative=True, a=10):
-    grad = []
+def _fn_term(x_i, a=10):
+    return x_i ** 2 - a * np.cos(2 * np.pi * x_i)
 
-    for x_i in x_input:
-        p_deriv = private_derivative(x_i, a)
 
-        grad.append(-p_deriv if negative else p_deriv)
+def fn2d(x, y, a=10):
+    print()
+    return 2 * a + x**2 - a * np.cos(2 * np.pi * x) + y**2 - a * np.cos(2 * np.pi * y)
 
-    return grad
+
+def fn(x, a=10):
+    return a * x.size + np.apply_along_axis(_fn_term, 0, x, a).sum()
+
+
+def hessian(x, a=10):
+    n: int = x.size
+    h_matrix = np.zeros((n, n))
+    row, col = np.diag_indices_from(h_matrix)
+    h_matrix[row, col] = np.apply_along_axis(_d2fn, 0, x, a)
+
+    return h_matrix
+
+
+def gradient(x, a=10):
+    return np.apply_along_axis(_dfn, 0, x, a)
